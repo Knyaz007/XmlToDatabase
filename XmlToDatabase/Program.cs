@@ -35,7 +35,7 @@ namespace XmlToDatabase
                 IOrderService orderService = new OrderService(userRepository, orderRepository, productRepository, connectionFactory);
 
                 // Загрузка данных из XML
-                var orders = OrderLoader.LoadOrdersFromXml(xmlFilePath);
+                var orders = OrderLoader.LoadOrdersForProcessing(xmlFilePath);
 
                 if (!orders.Any())
                 {

@@ -12,6 +12,7 @@ namespace XmlToDatabase
             _connectionFactory = connectionFactory;
         }
 
+        // Сохранение пользователя (уже реализован)
         public int SaveUser(User user, IDbConnection connection, IDbTransaction transaction)
         {
             using (var command = connection.CreateCommand())
@@ -32,6 +33,76 @@ namespace XmlToDatabase
                 command.Parameters.Add(new SqlParameter("@LastName", fullNameParts.Length > 0 ? fullNameParts[0] : ""));
 
                 return (int)command.ExecuteScalar();
+            }
+        }
+
+        // Обновление данных пользователя (уже реализован)
+        public void UpdateUser(User user, IDbConnection connection, IDbTransaction transaction)
+        {
+            using (var command = connection.CreateCommand())
+            {
+                command.Transaction = transaction;
+                //command.CommandText = @"
+                //    UPDATE Пользователи 
+                //    SET Электронная_почта = @Email 
+                //    WHERE Имя_пользователя = @FullName";
+
+                command.CommandText = @"
+                    UPDATE Пользователи 
+                    SET  Имя_пользователя = @FullName
+                    WHERE Электронная_почта = @Email ";
+
+                var fullNameParam = command.CreateParameter();
+                fullNameParam.ParameterName = "@FullName";
+                fullNameParam.Value = user.FullName;
+                command.Parameters.Add(fullNameParam);
+
+                var emailParam = command.CreateParameter();
+                emailParam.ParameterName = "@Email";
+                emailParam.Value = user.Email;
+                command.Parameters.Add(emailParam);
+
+                command.ExecuteNonQuery();
+            }
+        }
+
+        // Новый метод для получения ID пользователя
+        public int? GetUserId(User user, IDbConnection connection, IDbTransaction transaction)
+        {
+            using (var command = connection.CreateCommand())
+            {
+                command.Transaction = transaction;
+                command.CommandText = @"
+            SELECT ID_Пользователя 
+            FROM Пользователи 
+            WHERE Электронная_почта = @Email";
+
+                var emailParam = command.CreateParameter();
+                emailParam.ParameterName = "@Email";
+                emailParam.Value = user.Email;
+                command.Parameters.Add(emailParam);
+
+               
+                var result = command.ExecuteScalar();
+                return result != null ? (int?)result : null;
+            }
+        }
+
+
+        // Новый метод для удаления пользователя
+        public void DeleteUser(int userId, IDbConnection connection, IDbTransaction transaction)
+        {
+            using (var command = connection.CreateCommand())
+            {
+                command.Transaction = transaction;
+                command.CommandText = "DELETE FROM Пользователи WHERE ID_Пользователя = @UserId";
+
+                var userIdParam = command.CreateParameter();
+                userIdParam.ParameterName = "@UserId";
+                userIdParam.Value = userId;
+                command.Parameters.Add(userIdParam);
+
+                command.ExecuteNonQuery();
             }
         }
     }
