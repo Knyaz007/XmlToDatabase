@@ -1,49 +1,50 @@
 ﻿using System;
 using System.Data;
+using XmlToDatabase.Utils;
 
 namespace XmlToDatabase
 {
     public class ProductRepository : IProductRepository
     {
-        private readonly IDatabaseConnectionFactory _connectionFactory;
+        private readonly IUnitOfWork _unitOfWork;
 
-        public ProductRepository(IDatabaseConnectionFactory connectionFactory)
+        public ProductRepository(IUnitOfWork unitOfWork)
         {
-            _connectionFactory = connectionFactory;
+            _unitOfWork = unitOfWork;
         }
+
+        //public void SaveProduct(Product product, int orderId)
+        //{
+        //    using (var command = _unitOfWork.Connection.CreateCommand())
+        //    {
+        //        _unitOfWork.Connection.Open();
+        //        using (var transaction = _unitOfWork.Connection.BeginTransaction())
+        //        {
+        //            try
+        //            {
+        //                SaveProduct(product, orderId);
+        //                transaction.Commit();
+        //            }
+        //            catch (Exception ex)
+        //            {
+        //                transaction.Rollback();
+        //                Console.WriteLine($"Ошибка при работе с базой данных: {ex.Message}");
+        //            }
+        //        }
+        //    }
+        //}
 
         public void SaveProduct(Product product, int orderId)
         {
-            using (var connection = _connectionFactory.CreateConnection())
-            {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    try
-                    {
-                        SaveProduct(product, orderId, connection, transaction);
-                        transaction.Commit();
-                    }
-                    catch (Exception ex)
-                    {
-                        transaction.Rollback();
-                        Console.WriteLine($"Ошибка при работе с базой данных: {ex.Message}");
-                    }
-                }
-            }
-        }
-
-        public void SaveProduct(Product product, int orderId, IDbConnection connection, IDbTransaction transaction)
-        {
-            if (ProductExists(product.Name, connection, transaction))
-            {
+            if (ProductExists(product.Name))
+            { 
                 // Удаляем продукт, если существует
-                DeleteProduct(product.Name, connection, transaction);
+                DeleteProduct(product.Name);
             }
 
-            using (var command = connection.CreateCommand())
+            using (var command = _unitOfWork.Connection.CreateCommand())
             {
-                command.Transaction = transaction;
+                command.Transaction = _unitOfWork.Transaction;
                 command.CommandText = @"
                     INSERT INTO Товары (Название, Цена, Количество_на_складе)
                     VALUES (@Name, @Price, 0);
@@ -92,11 +93,11 @@ namespace XmlToDatabase
         }
 
         // Метод для проверки существования продукта
-        public bool ProductExists(string productName, IDbConnection connection, IDbTransaction transaction)
+        public bool ProductExists(string productName)
         {
-            using (var command = connection.CreateCommand())
+            using (var command = _unitOfWork.Connection.CreateCommand())
             {
-                command.Transaction = transaction;
+                command.Transaction = _unitOfWork.Transaction;
                 command.CommandText = "SELECT COUNT(1) FROM Товары WHERE Название = @Name";
 
                 var nameParam = command.CreateParameter();
@@ -109,11 +110,11 @@ namespace XmlToDatabase
         }
 
         // Метод для удаления продукта
-        public void DeleteProduct(string productName, IDbConnection connection, IDbTransaction transaction)
+        public void DeleteProduct(string productName)
         {
-            using (var command = connection.CreateCommand())
+            using (var command = _unitOfWork.Connection.CreateCommand())
             {
-                command.Transaction = transaction;
+                command.Transaction = _unitOfWork.Transaction;
                 command.CommandText = "DELETE FROM Товары WHERE Название = @Name";
 
                 var nameParam = command.CreateParameter();
@@ -125,11 +126,11 @@ namespace XmlToDatabase
             }
         }
 
-        public void UpdateProduct(Product product, IDbConnection connection, IDbTransaction transaction)
+        public void UpdateProduct(Product product)
         {
-            using (var command = connection.CreateCommand())
+            using (var command = _unitOfWork.Connection.CreateCommand())
             {
-                command.Transaction = transaction;
+                command.Transaction = _unitOfWork.Transaction;
                 command.CommandText = @"
                 UPDATE Товары 
                 SET Цена = @Price 

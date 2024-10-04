@@ -1,5 +1,6 @@
-﻿using System.Collections.Generic;
-using System.Data;
+﻿using System;
+using System.Collections.Generic;
+using XmlToDatabase.Utils;
 
 namespace XmlToDatabase
 {
@@ -20,70 +21,66 @@ namespace XmlToDatabase
 
         public void SaveOrders(IEnumerable<Order> orders)
         {
-            using (var connection = _connectionFactory.CreateConnection())
+            using (var unitOfWork = new UnitOfWork(_connectionFactory)) // Создаем новый UnitOfWork
             {
-                connection.Open();
-                using (var transaction = connection.BeginTransaction())
+                unitOfWork.BeginTransaction(); // Начинаем транзакцию
+                try
                 {
-                    try
+                    foreach (var order in orders)
                     {
-                        foreach (var order in orders)
+                        // Проверка и обновление/вставка пользователя
+                        var existingUserId = _userRepository.GetUserId(order.User);
+                        if (existingUserId.HasValue)
                         {
-                            // Проверка и обновление/вставка пользователя
-                            var existingUserId = _userRepository.GetUserId(order.User, connection, transaction);
-                            if (existingUserId.HasValue)
-                            {
-                                // Если пользователь существует, обновляем его данные
-                                _userRepository.UpdateUser(order.User, connection, transaction);
-                            }
-                            else
-                            {
-                                // Если пользователя нет, добавляем его
-                                existingUserId = _userRepository.SaveUser(order.User, connection, transaction);
-                            }
-
-                            // Проверка и обновление/вставка заказа
-                            var existingOrderId = _orderRepository.GetOrderId(order.Id, connection, transaction);
-                            if (existingOrderId.HasValue)
-                            {
-                                // Если заказ существует, обновляем его
-                                _orderRepository.UpdateOrder(order, existingUserId.Value, connection, transaction);
-                            }
-                            else
-                            {
-                                // Если заказа нет, добавляем его
-                                existingOrderId = _orderRepository.SaveOrder(order, existingUserId.Value, connection, transaction);
-                            }
-
-                            // После сохранения заказа добавляем продукты, ссылаясь на сохраненный orderId
-                            foreach (var product in order.Products)
-                            {
-                                if (_productRepository.ProductExists(product.Name, connection, transaction))
-                                {
-                                    // Если продукт существует, обновляем его
-                                    _productRepository.UpdateProduct(product, connection, transaction);
-                                }
-                                else
-                                {
-                                    // Если продукта нет, добавляем его
-                                    _productRepository.SaveProduct(product, existingOrderId.Value, connection, transaction);
-                                }
-                            }
+                            // Если пользователь существует, обновляем его данные
+                            _userRepository.UpdateUser(order.User);
+                        }
+                        else
+                        {
+                            // Если пользователя нет, добавляем его
+                            existingUserId = _userRepository.SaveUser(order.User);
                         }
 
-                        // Коммит транзакции
-                        transaction.Commit();
+                        // Проверка и обновление/вставка заказа
+                        var existingOrderId = _orderRepository.GetOrderId(order.Id);
+                        if (existingOrderId.HasValue)
+                        {
+                            // Если заказ существует, обновляем его
+                            _orderRepository.UpdateOrder(order, existingUserId.Value);
+                        }
+                        else
+                        {
+                            // Если заказа нет, добавляем его
+                            existingOrderId = _orderRepository.SaveOrder(order, existingUserId.Value);
+                        }
+
+                        // После сохранения заказа добавляем продукты
+                        foreach (var product in order.Products)
+                        {
+                            if (_productRepository.ProductExists(product.Name))
+                            {
+                                // Если продукт существует, обновляем его
+                                _productRepository.UpdateProduct(product);
+                            }
+                            else
+                            {
+                                // Если продукта нет, добавляем его
+                                _productRepository.SaveProduct(product, existingOrderId.Value);
+                            }
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        // Откат транзакции в случае ошибки
-                        transaction.Rollback();
-                        Console.WriteLine($"Произошла ошибка при работе с базой данных: {ex.Message}");
-                        throw;
-                    }
+
+                    // Коммит транзакции
+                    unitOfWork.Commit();
+                }
+                catch (Exception ex)
+                {
+                    // Откат транзакции в случае ошибки
+                    unitOfWork.Rollback();
+                    Console.WriteLine($"Произошла ошибка при работе с базой данных: {ex.Message}");
+                    throw; // Перекидываем исключение для дальнейшей обработки
                 }
             }
         }
-
     }
 }
